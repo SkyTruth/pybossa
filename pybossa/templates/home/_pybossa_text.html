@@ -5,3 +5,6 @@
   <li>Things computers can't do</li>
 </ul>
 
+{% if current_user.is_anonymous() %}
+  <a class="btn btn-danger" href="{{ url_for('account.register') }}">Sign Up & Get Started!</a>
+{% endif %}
