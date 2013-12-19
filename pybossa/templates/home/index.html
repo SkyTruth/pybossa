@@ -49,37 +49,7 @@
             {% endif %}
           </div>
       </section>
-      
-      <section>
-        <h2><i class="icon-th"></i>{{ _('Most Active Applications') }}</h2>
-        <div class="row">
-          {% for app in top_apps %}
-          <div class="span3">
-            <div class="app box">
-                {% if app.info.thumbnail %}
-                <a href="{{url_for('app.details', short_name=app.short_name)}}" class="image" style="background-image:url({{app.info.thumbnail}})"></a>
-                {% else %}
-                <a href="{{url_for('app.details', short_name=app.short_name)}}" class="image" style="background-image:url({{url_for('static',filename='placeholder.png')}})"></a>
-                {% endif %}
-                <h3>{{app.name | truncate(20, true)}}</h3>
-                <p>{{app.description | truncate(32, true)}}</p>
-                <p><a href="{{url_for('app.details',short_name=app.short_name)}}" class="btn btn-mini btn-info">Info</a> <a href="{{url_for('app.presenter',short_name=app.short_name)}}" class="btn btn-mini btn-primary">{{ _('Start') }}</a></p>
-            </div>
-          </div>
-          {% endfor %}
-          {% for i in range(4-top_apps|count)%}
-          <div class="span3">
-            <div class="app box">
-                <a href="#" class="image" style="background-image:url({{url_for('static',filename='img/placeholder.png')}})"></a>
-                <h3>{{ _('Another application') }}</h3>
-                <p>{{ _('coming soon!') }}</p>
-                <!-- p><a href="{{url_for('app.new')}}" class="btn btn-mini btn-primary">{{ _('Create an app') }}</a></p -->
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </section>
-      
+            
       {% if top_users %}
       <section id="top_users" class="grey">
         <h2><i class="icon-group"></i>{{ _('Most Active Volunteers') }}</h2>
