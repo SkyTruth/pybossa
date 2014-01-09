@@ -36,3 +36,4 @@ keys/*
 *.pem
 *~
 uploads
+*~
