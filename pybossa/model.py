@@ -219,6 +219,12 @@ class App(db.Model, DomainObject):
     #: `category` or not for this app
     category = relationship('Category')
 
+    def ntasks(self):
+        sql = text('''SELECT COUNT(id) FROM task WHERE app_id=:app_id''')
+        results = db.engine.execute(sql, app_id=self.id)
+        for row in results:
+            return int(row[0])
+
     #: Percentage of completed tasks based on Task.state
     #: (0 not done, 1 completed)
     def completion_status(self):
