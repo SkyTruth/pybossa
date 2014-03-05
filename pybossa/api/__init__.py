@@ -150,8 +150,8 @@ def new_task(app_id):
             s = URLSafeSerializer(current_app.config.get('SECRET_KEY'))
             r = make_response(json.dumps(task.dictize()))
             r.mimetype = "application/json"
-            cookie_id = 'task_run_for_task_id_%s' % task.id
-            r.set_cookie(cookie_id, s.dumps(task.dictize()))
+            # cookie_id = 'task_run_for_task_id_%s' % task.id
+            # r.set_cookie(cookie_id, s.dumps(task.dictize()))
             return r
 
         else:

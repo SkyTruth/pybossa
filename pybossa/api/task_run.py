@@ -41,15 +41,16 @@ class TaskRunAPI(APIBase):
         """Validate the task_run object and update it with user id or ip."""
         s = URLSafeSerializer(current_app.config.get('SECRET_KEY'))
         # Get the cookie with the task signed for the current task_run
-        cookie_id = 'task_run_for_task_id_%s' % obj.task_id
-        task_cookie = request.cookies.get(cookie_id)
-        if task_cookie is None:
-            raise Unauthorized("Missing task cookie for posting"
-                               " a valid task_run")
+        # cookie_id = 'task_run_for_task_id_%s' % obj.task_id
+        # task_cookie = request.cookies.get(cookie_id)
+        # if task_cookie is None:
+        #     raise Unauthorized("Missing task cookie for posting"
+        #                        " a valid task_run")
         # Load the real task from the DB
-        task_cookie = s.loads(task_cookie)
+        # task_cookie = s.loads(task_cookie)
         #task = db.session.query(model.Task).get(task_cookie['id'])
-        task = Task.query.get(task_cookie['id'])
+        # task = Task.query.get(task_cookie['id'])
+        task = Task.query.get(obj.task_id)
         if ((task is None) or (task.id != obj.task_id)):  # pragma: no cover
             raise Forbidden('Invalid task_id')
         if (task.app_id != obj.app_id):
