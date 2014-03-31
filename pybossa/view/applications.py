@@ -45,6 +45,7 @@ import presenter as presenter_module
 import operator
 import math
 import requests
+import itertools
 
 blueprint = Blueprint('app', __name__)
 
@@ -893,69 +894,60 @@ def export_to(short_name):
                                loading_text=loading_text,
                                app=app)
 
-    def gen_json(table):
-        n = db.session.query(table)\
-            .filter_by(app_id=app.id).count()
-        sep = ", "
+    def gen_json(results):
+        sep = ""
         yield "["
-        for i, tr in enumerate(db.session.query(table)
-                                 .filter_by(app_id=app.id).yield_per(1), 1):
-            item = json.dumps(tr.dictize())
-            if (i == n):
-                sep = ""
-            yield item + sep
+        for tr in results:
+            item = json.dumps(tr)
+            yield sep + item
+            sep = ", "
         yield "]"
 
-    def format_csv_properly(row):
-        keys = sorted(row.keys())
-        values = []
-        for k in keys:
-            values.append(row[k])
-        return values
-
-
     def handle_task(writer, t):
-        if (type(t.info) == dict):
-            values = format_csv_properly(t.info)
-            writer.writerow(values)
-        else: # pragma: no cover
-            writer.writerow([t.info])
+        writer.writerow(t['info'].values())
 
     def handle_task_run(writer, t):
-        if (type(t.info) == dict):
-            values = format_csv_properly(t.info)
-            writer.writerow(values)
-        else: # pragma: no cover
-            writer.writerow([t.info])
+        if (type(t['info']) == dict):
+            writer.writerow(t['info'].values())
+        else:
+            writer.writerow([t['info']])
+    
+    def handle_task_run(writer, t):
+        if (type(t['info']) == dict):
+            writer.writerow(t['info'].values())
+        else:
+            writer.writerow([t['info']])
 
-    def get_csv(out, writer, table, handle_row):
-        for tr in db.session.query(table)\
-                .filter_by(app_id=app.id)\
-                .yield_per(1):
+    def handle_combined(writer, t):
+        if (type(t['info']) == dict):
+            res = t['info'].values()
+        else:
+            res = [t['info']]
+        if (type(t['task']['info']) == dict):
+            res += t['task']['info'].values()
+        else:
+            res += [t['task']['info']]
+        writer.writerow(res)
+
+    def get_csv(out, writer, results, handle_row):
+        for tr in results:
             handle_row(writer, tr)
-        yield out.getvalue()
 
-    def respond_json(ty):
-        tables = {"task": model.Task, "task_run": model.TaskRun}
-        try:
-            table = tables[ty]
-        except KeyError:
-            return abort(404)
-        return Response(gen_json(table), mimetype='application/json')
+    def respond_json(ty, results):
+        return Response(gen_json(results), mimetype='application/json', headers={'Content-Disposition': 'attachment; filename="%s.json"' % ty})
 
-    def create_ckan_datastore(ckan, table, package_id):
+    def create_ckan_datastore(ckan, table, results, package_id):
         tables = {"task": model.Task, "task_run": model.TaskRun}
         new_resource = ckan.resource_create(name=table,
                                             package_id=package_id)
         ckan.datastore_create(name=table,
                               resource_id=new_resource['result']['id'])
         ckan.datastore_upsert(name=table,
-                              records=gen_json(tables[table]),
+                              records=gen_json(results),
                               resource_id=new_resource['result']['id'])
 
-    def respond_ckan(ty):
+    def respond_ckan(ty, results):
         # First check if there is a package (dataset) in CKAN
-        tables = {"task": model.Task, "task_run": model.TaskRun}
         msg_1 = gettext("Data exported to ")
         msg = msg_1 + "%s ..." % current_app.config['CKAN_URL']
         ckan = Ckan(url=current_app.config['CKAN_URL'],
@@ -968,34 +960,31 @@ def export_to(short_name):
                 raise e
             if package:
                 # Update the package
-                owner = User.query.get(app.owner_id)
-                package = ckan.package_update(app=app, user=owner, url=app_url,
+                package = ckan.package_update(app=app, user=app.owner, url=app_url,
                                               resources=package['resources'])
-
                 ckan.package = package
                 resource_found = False
-                # print len(package['resources'])
+                print len(package['resources'])
                 for r in package['resources']:
                     if r['name'] == ty:
                         ckan.datastore_delete(name=ty, resource_id=r['id'])
                         ckan.datastore_create(name=ty, resource_id=r['id'])
                         ckan.datastore_upsert(name=ty,
-                                              records=gen_json(tables[ty]),
+                                              records=gen_json(results),
                                               resource_id=r['id'])
                         resource_found = True
                         break
                 if not resource_found:
-                    create_ckan_datastore(ckan, ty, package['id'])
+                    create_ckan_datastore(ckan, ty, results, package['id'])
             else:
-                owner = User.query.get(app.owner_id)
-                package = ckan.package_create(app=app, user=owner, url=app_url)
-                create_ckan_datastore(ckan, ty, package['id'])
+                package = ckan.package_create(app=app, user=app.owner, url=app_url)
+                create_ckan_datastore(ckan, ty, results, package['id'])
                 #new_resource = ckan.resource_create(name=ty,
                 #                                    package_id=package['id'])
                 #ckan.datastore_create(name=ty,
                 #                      resource_id=new_resource['result']['id'])
                 #ckan.datastore_upsert(name=ty,
-                #                     records=gen_json(tables[ty]),
+                #                     records=gen_json(results),
                 #                     resource_id=new_resource['result']['id'])
             flash(msg, 'success')
             return respond()
@@ -1007,44 +996,51 @@ def export_to(short_name):
             if len(inst.args) == 3:
                 t, msg, status_code = inst.args
                 msg = ("Error: %s with status code: %s" % (t, status_code))
-            else: # pragma: no cover
+            else:
                 msg = ("Error: %s" % inst.args[0])
             current_app.logger.error(msg)
             flash(msg, 'danger')
         finally:
             return respond()
 
-    def respond_csv(ty):
+    def respond_csv(ty, results):
         # Export Task(/Runs) to CSV
         types = {
             "task": (
-                model.Task, handle_task,
+                handle_task,
                 (lambda x: True),
                 gettext(
                     "Oops, the application does not have tasks to \
                     export, if you are the owner add some tasks")),
             "task_run": (
-                model.TaskRun, handle_task_run,
-                (lambda x: type(x.info) == dict),
+                handle_task_run,
+                (lambda x: type(x['info']) == dict),
+                gettext(
+                    "Oops, there are no Task Runs yet to export, invite \
+                     some users to participate")),
+            "combined": (
+                handle_combined,
+                (lambda x: type(x['info']) == dict),
                 gettext(
                     "Oops, there are no Task Runs yet to export, invite \
                      some users to participate"))}
         try:
-            table, handle_row, test, msg = types[ty]
+            handle_row, test, msg = types[ty]
         except KeyError:
             return abort(404)
 
         out = StringIO()
         writer = UnicodeWriter(out)
-        t = db.session.query(table)\
-            .filter_by(app_id=app.id)\
-            .first()
+        results, results2 = itertools.tee(results)
+        t = results2.next()
         if t is not None:
             if test(t):
-                writer.writerow(sorted(t.info.keys()))
-
-            return Response(get_csv(out, writer, table, handle_row),
-                            mimetype='text/csv')
+                keys = t['info'].keys()
+                if ty == "combined":
+                    keys += t['task']['info'].keys()
+                writer.writerow(keys)
+            get_csv(out, writer, results, handle_row)
+            return Response(out.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment; filename="%s.csv"' % ty})
         else:
             flash(msg, 'info')
             return respond()
@@ -1066,8 +1062,24 @@ def export_to(short_name):
                                app=app)
     if fmt not in export_formats:
         abort(404)
-    return {"json": respond_json, "csv": respond_csv, 'ckan': respond_ckan}[fmt](ty)
 
+    def dictize_results(results):
+        for row in results.yield_per(1):
+            yield row.dictize()
+
+    def combine_results(results):
+        for row in results.yield_per(1):
+            res = row.dictize()
+            res['task'] = row.task.dictize()
+            yield res
+
+    types = {
+        "task": dictize_results(db.session.query(model.Task).filter_by(app_id=app.id)),
+        "task_run": dictize_results(db.session.query(model.TaskRun).filter_by(app_id=app.id)),
+        "combined": combine_results(db.session.query(model.TaskRun).filter_by(app_id=app.id))}
+    results = types[ty]
+
+    return {"json": respond_json, "csv": respond_csv, 'ckan': respond_ckan}[fmt](ty, results)
 
 @blueprint.route('/<short_name>/stats')
 def show_stats(short_name):
