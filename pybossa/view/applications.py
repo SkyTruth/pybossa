@@ -668,7 +668,7 @@ def task_presenter(short_name, task_id):
             url = url_for(
                 'account.signin',
                 next=next_url)
-            flash(msg_1 + "<a href=\"" + url + "\">Sign in now!</a>", "warning")
+            # flash(msg_1 + "<a href=\"" + url + "\">Sign in now!</a>", "warning")
 
     title = app_title(app, "Contribute")
     template_args = {"app": app, "title": title}
@@ -738,7 +738,7 @@ def newtask(short_name):
             msg = "Ooops! You are an anonymous user and will not \
                    get any credit for your contributions. Sign in \
                    now!"
-            flash(gettext(msg), "warning")
+            # flash(gettext(msg), "warning")
         resp = make_response(render_template('/applications/presenter.html', **template_args))
 
     resp.set_cookie(app.short_name + 'tutorial', 'seen')
